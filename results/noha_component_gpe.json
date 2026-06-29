@@ -1,0 +1,22 @@
+{
+  "total": 104,
+  "ok": 90,
+  "failed": 14,
+  "availability_pct": 86.54,
+  "outages": [
+    {
+      "start": 1782760191.522,
+      "end": 1782760237.318,
+      "seconds": 45.8
+    }
+  ],
+  "downtime_s": 45.8,
+  "mttd_s": 11.34,
+  "mttr_s": 57.13,
+  "scenario": "noha_component_gpe",
+  "fault": "component",
+  "target": "tg2",
+  "observer": "tg1",
+  "ha_mode": "NOHA",
+  "recovered": true
+}

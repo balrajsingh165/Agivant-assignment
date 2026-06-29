@@ -17,15 +17,15 @@ measured time-to-detect, downtime, time-to-recovery (MTTR), and data durability.
 
 Headline results:
 
-- Every failure mode recovered cleanly, with **no data loss** across the run.
+- Every failure mode recovered cleanly, and **no acknowledged write was ever lost**.
 - Recovery time is governed by the **recovery mechanism**, not the severity of the
-  fault: failures needing a service or node restart recover in ~50–60 s, while a
+  fault: failures needing a service or node restart recover in ~52–57 s, while a
   freeze or a network partition (which only need resume/reconnect) recover in
-  ~25–30 s.
-- A single failed component (GPE) is tolerated noticeably longer before the data
-  path is affected (~13 s) than a whole-node loss (~3 s).
-- Loss of the gateway/master node is survivable: a surviving node continued to
-  serve and the cluster recovered in ~60 s.
+  ~23–33 s.
+- A single failed component (GPE) is tolerated ~11 s before the data path is
+  affected, whereas a whole-node loss is felt almost immediately (~0.2 s).
+- Loss of the gateway/master node is survivable: a surviving node kept serving and
+  the cluster recovered in ~56 s.
 
 ---
 
@@ -93,76 +93,80 @@ HTTP 200. Tests live in `tests/`; raw per-scenario results in `results/`.
 
 | # | Test case | Fault | MTTD (s) | Downtime (s) | MTTR (s) | Availability |
 |---|-----------|-------|---------:|-------------:|---------:|-------------:|
-| 1 | Data-node hard crash | `docker kill tg2` | 2.8 | 50.0 | 52.9 | 70% |
-| 2 | Graceful node shutdown | `docker stop tg2` | 2.5 | 48.3 | 50.9 | 72% |
-| 3 | Frozen / unresponsive node | `docker pause tg3` | 3.3 | 23.3 | 26.6 | 84% |
-| 4 | Network partition | isolate tg3 | 3.1 | 27.3 | 30.1 | 75% |
-| 5 | Single-component failure | stop `GPE_2` | 13.5 | 42.5 | 56.0 | 84% |
-| 6 | Master / gateway-node crash | `docker kill tg1` | 10.4 | 49.2 | 59.6 | 96% |
-| 7 | Write durability under failure | `docker kill tg3` | — | — | — | 75% writes |
+| 1 | Data-node hard crash | `docker kill tg2` | 0.2 | 52.3 | 53.5 | 74% |
+| 2 | Graceful node shutdown | `docker stop tg2` | 0.2 | 52.4 | 52.6 | 74% |
+| 3 | Frozen / unresponsive node | `docker pause tg3` | 0.3 | 22.9 | 23.2 | 87% |
+| 4 | Network partition | isolate tg3 | 0.2 | 29.5 | 32.8 | 84% |
+| 5 | Single-component failure | stop `GPE_2` | 11.3 | 45.8 | 57.1 | 87% |
+| 6 | Master / gateway-node crash | `docker kill tg1` | 0.2 | 55.6 | 55.9 | 73% |
+| 7 | Write durability under failure | `docker kill tg3` / partition | — | — | — | no loss |
 
 ### 4.1 Data-node hard crash
 **Reasoning:** the most severe unplanned failure — a node disappears with no
-graceful shutdown. **Finding:** queries began failing 2.8 s after the crash and
-the affected partition was unavailable for 50 s; full recovery required restarting
-the node and its services — **MTTR 52.9 s**. At replication factor 1 there is no
+graceful shutdown. **Finding:** queries began failing almost immediately (0.2 s) and
+the affected partition was unavailable for ~52 s; full recovery required restarting
+the node and its services — **MTTR 53.5 s**. At replication factor 1 there is no
 replica to take over, so the data path is unavailable until the node returns.
 
 ### 4.2 Graceful node shutdown
 **Reasoning:** planned maintenance — does an orderly stop behave better than a
-crash? **Finding:** essentially identical to the crash (MTTD 2.5 s, **MTTR
-50.9 s**). With a single copy of each partition, a clean shutdown provides no
-availability benefit; the partition is gone until the node restarts.
+crash? **Finding:** essentially identical to the crash (**MTTR 52.6 s**). With a
+single copy of each partition, a clean shutdown provides no availability benefit;
+the partition is gone until the node restarts.
 
 ### 4.3 Frozen / unresponsive node
 **Reasoning:** real nodes do not always crash cleanly — they hang (GC pauses, disk
-stalls, CPU starvation). **Finding:** detected in 3.3 s; recovery was the fastest
-(**MTTR 26.6 s**) because resuming the node restarts the existing processes — no
-service restart is needed and the system re-converges on its own.
+stalls, CPU starvation). **Finding:** recovery was the fastest (**MTTR 23.2 s**)
+because resuming the node restarts the existing processes — no service restart is
+needed and the system re-converges on its own.
 
 ### 4.4 Network partition
 **Reasoning:** the classic distributed-systems failure — a node is alive but
-isolated. **Finding:** detected in 3.1 s; **MTTR 30.1 s** after reconnection at the
-node's original address. No data loss. Reconnection (rather than a full restart)
-is why recovery is faster than the crash cases.
+isolated. **Finding:** **MTTR 32.8 s** after reconnection at the node's original
+address. Availability *flapped* during recovery (two outage windows) as the
+isolated node rejoined — recovery is not a single clean transition.
 
 ### 4.5 Single-component failure
 **Reasoning:** TigerGraph runs multiple services per node; isolating one engine
 (the GPE serving a partition) tests behaviour at finer granularity than a
-whole-node loss. **Finding:** the data path kept working for **13.5 s** before
+whole-node loss. **Finding:** the data path kept working for **11.3 s** before
 queries failed — markedly longer than a whole-node loss — then recovery via a
-service restart gave **MTTR 56.0 s**. Component-level loss therefore has a longer
-tolerance window than node loss.
+service restart gave **MTTR 57.1 s**. Component-level loss has a longer tolerance
+window than node loss.
 
 ### 4.6 Master / gateway-node crash
 **Reasoning:** losing the node that also fronts the gateway is the case most
 likely to take the whole system down. **Finding:** observed from a surviving node,
-the cluster tolerated the loss for 10.4 s before queries failed, then recovered in
-**59.6 s** (96% availability over the window). Loss of any single node — including
-the master — is survivable and self-recovering.
+the cluster recovered in **55.9 s** (73% availability over the window). Loss of any
+single node — including the master — is survivable and self-recovering.
 
 ### 4.7 Write durability under failure
 **Reasoning:** the hardest question — does a write *during* a node failure succeed,
-and is it still there afterwards? **Finding:** with one node down, 30 of 40 upserts
-succeeded (**75% write availability**) — the ~25% that targeted the offline
-partition failed — and **all 30 acknowledged writes persisted** after recovery
-(vertex count rose by exactly 30). Writes are never silently lost: a write either
-fails outright or is durable.
+and is it still there afterwards? **Finding:** with one node down, roughly half of
+the upserts succeeded (the rest targeted the offline partition and failed), and
+**every acknowledged write persisted** after recovery — no data loss. Under a
+network partition an additional effect appeared: some writes the client saw *time
+out* (counted as failures) were nonetheless committed by the server — an
+**ambiguous-write** outcome. The durability guarantee holds (nothing acknowledged
+is lost), but a client cannot assume a timed-out write did not take effect.
 
 ---
 
 ## 5. Cross-cutting observations
 
-- **Detection is fast and uniform** (~2.5–3.3 s) for whole-node failures; a single
-  component failure surfaces more slowly (~13 s).
+- **Whole-node failures are felt almost immediately** (~0.2 s) because the
+  distributed query needs every partition; a single component (GPE) failure is
+  tolerated ~11 s before the data path is affected.
 - **Recovery cost tracks the recovery mechanism, not fault severity.** Restart-based
-  recovery (crash, graceful stop, component) clusters at ~50–60 s; resume/reconnect
-  recovery (freeze, partition) at ~25–30 s.
-- **No data loss in any scenario.** After repeated destructive cycles the cluster
-  returned to full health with all data intact; acknowledged writes always persisted.
+  recovery (crash, graceful stop, component, master) clusters at ~52–57 s;
+  resume/reconnect recovery (freeze, partition) at ~23–33 s.
+- **Recovery is not always a clean single transition** — the network partition
+  showed availability flapping as the node rejoined.
+- **No acknowledged write is ever lost.** Writes either fail outright or are durable;
+  under a partition, some client-failed writes still commit (ambiguous, not lost).
 - At replication factor 1 there is no failover — every node loss causes an outage of
-  its partition. This is the baseline that quantifies the value of running with
-  replication factor 2.
+  its partition. This is the baseline that quantifies the value of replication
+  factor 2.
 
 ---
 

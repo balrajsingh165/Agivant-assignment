@@ -108,13 +108,19 @@ def write_scenario(name, action, target, n=40, recover_timeout=180):
     time.sleep(3)
     after = cluster.person_count(observer)
 
+    # Durability invariant: every acknowledged write must persist, so the count
+    # increase must be at least the acknowledged writes. An increase *greater*
+    # than acknowledged is not data loss but write ambiguity (e.g. a request the
+    # client saw time out under a partition that the server still committed).
+    delta = (after - before) if (after is not None and before is not None) else None
     res = {
         "scenario": name, "ha_mode": cluster.ha_mode(), "fault": action, "target": target,
         "before": before, "after": after,
         "writes_attempted": n, "writes_ok": ok, "writes_failed": fail,
         "write_availability_pct": round(100 * ok / n, 1) if n else 0.0,
-        "persisted_delta": (after - before) if (after is not None and before is not None) else None,
-        "durable_no_loss": (after is not None and before is not None and (after - before) == ok),
+        "persisted_delta": delta,
+        "ambiguous_writes": (delta - ok) if (delta is not None and delta > ok) else 0,
+        "durable_no_loss": (delta is not None and delta >= ok),
     }
     _save(name, res)
     return res

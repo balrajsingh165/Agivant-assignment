@@ -1,0 +1,15 @@
+{
+  "scenario": "noha_wpartition_tg2",
+  "ha_mode": "NOHA",
+  "fault": "partition",
+  "target": "tg2",
+  "before": 5166,
+  "after": 5197,
+  "writes_attempted": 40,
+  "writes_ok": 20,
+  "writes_failed": 20,
+  "write_availability_pct": 50.0,
+  "persisted_delta": 31,
+  "ambiguous_writes": 11,
+  "durable_no_loss": true
+}

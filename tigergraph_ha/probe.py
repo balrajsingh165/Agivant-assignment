@@ -66,7 +66,6 @@ def analyze(samples, fault_ts):
     }
     after = [(s, e) for s, e in windows if e >= fault_ts]
     if after:
-        s, e = after[0]
-        res["mttd_s"] = round(s - fault_ts, 2)
-        res["mttr_s"] = round(e - fault_ts, 2)
+        res["mttd_s"] = round(after[0][0] - fault_ts, 2)   # first failure after the fault
+        res["mttr_s"] = round(after[-1][1] - fault_ts, 2)  # sustained recovery (last window ends)
     return res

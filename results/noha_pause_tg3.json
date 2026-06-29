@@ -1,22 +1,22 @@
 {
+  "total": 52,
+  "ok": 45,
+  "failed": 7,
+  "availability_pct": 86.54,
+  "outages": [
+    {
+      "start": 1782760095.329,
+      "end": 1782760118.239,
+      "seconds": 22.91
+    }
+  ],
+  "downtime_s": 22.91,
+  "mttd_s": 0.29,
+  "mttr_s": 23.2,
   "scenario": "noha_pause_tg3",
   "fault": "pause",
   "target": "tg3",
   "observer": "tg1",
   "ha_mode": "NOHA",
-  "total": 67,
-  "ok": 56,
-  "failed": 11,
-  "availability_pct": 83.582,
-  "outages": [
-    {
-      "start": 1782742072.285,
-      "end": 1782742095.605,
-      "seconds": 23.32
-    }
-  ],
-  "downtime_s": 23.32,
-  "mttd_s": 3.285,
-  "mttr_s": 26.605,
   "recovered": true
 }
