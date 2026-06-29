@@ -1,0 +1,22 @@
+{
+  "scenario": "noha_svcfail_tg2",
+  "fault": "component",
+  "target": "tg2",
+  "observer": "tg1",
+  "ha_mode": "NOHA",
+  "total": 120,
+  "ok": 101,
+  "failed": 19,
+  "availability_pct": 84.167,
+  "outages": [
+    {
+      "start": 1782742165.503,
+      "end": 1782742207.96,
+      "seconds": 42.457
+    }
+  ],
+  "downtime_s": 42.457,
+  "mttd_s": 13.503,
+  "mttr_s": 55.96,
+  "recovered": true
+}

@@ -1,0 +1,16 @@
+USE GRAPH social
+
+CREATE DISTRIBUTED QUERY ping_count() FOR GRAPH social {
+  SumAccum<INT> @@cnt;
+  start = {Person.*};
+  res = SELECT s FROM start:s ACCUM @@cnt += 1;
+  PRINT @@cnt AS person_count;
+}
+
+CREATE DISTRIBUTED QUERY neighbors(VERTEX<Person> p) FOR GRAPH social {
+  start = {p};
+  res = SELECT t FROM start:s -(Friendship:e)- Person:t;
+  PRINT res;
+}
+
+INSTALL QUERY ALL

@@ -1,0 +1,27 @@
+{
+  "scenario": "noha_partition_tg3",
+  "fault": "partition",
+  "target": "tg3",
+  "observer": "tg1",
+  "ha_mode": "NOHA",
+  "total": 51,
+  "ok": 38,
+  "failed": 13,
+  "availability_pct": 74.51,
+  "outages": [
+    {
+      "start": 1782742113.078,
+      "end": 1782742140.1,
+      "seconds": 27.022
+    },
+    {
+      "start": 1782742142.359,
+      "end": 1782742142.624,
+      "seconds": 0.265
+    }
+  ],
+  "downtime_s": 27.287,
+  "mttd_s": 3.078,
+  "mttr_s": 30.1,
+  "recovered": true
+}

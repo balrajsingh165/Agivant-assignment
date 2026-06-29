@@ -1,0 +1,12 @@
+[project]
+name = "tigergraph-ha-tests"
+version = "0.1.0"
+description = "TigerGraph high-availability node-failure test harness"
+requires-python = ">=3.10"
+dependencies = [
+    "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v -ra --tb=short"

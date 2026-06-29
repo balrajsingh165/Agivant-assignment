@@ -1,0 +1,34 @@
+{
+  "BasicConfig": {
+    "TigerGraph": {
+      "Username": "tigergraph",
+      "Password": "tigergraph",
+      "SSHPort": 22,
+      "PrivateKeyFile": "",
+      "PublicKeyFile": ""
+    },
+    "RootDir": {
+      "AppRoot": "/home/tigergraph/tigergraph/app",
+      "DataRoot": "/home/tigergraph/tigergraph/data",
+      "LogRoot": "/home/tigergraph/tigergraph/log",
+      "TempRoot": "/home/tigergraph/tigergraph/tmp"
+    },
+    "License": "__PASTE_LICENSE_JWT_HERE__",
+    "RegionAware": false,
+    "NodeList": [
+      "m1: 172.20.0.11",
+      "m2: 172.20.0.12",
+      "m3: 172.20.0.13"
+    ]
+  },
+  "AdvancedConfig": {
+    "ClusterConfig": {
+      "LoginConfig": {
+        "SudoUser": "tigergraph",
+        "Method": "K",
+        "K": "/home/tigergraph/.ssh/id_rsa"
+      },
+      "ReplicationFactor": 2
+    }
+  }
+}

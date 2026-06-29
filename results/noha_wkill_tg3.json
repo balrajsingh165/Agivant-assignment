@@ -1,0 +1,14 @@
+{
+  "scenario": "noha_wkill_tg3",
+  "ha_mode": "NOHA",
+  "fault": "kill",
+  "target": "tg3",
+  "before": 5000,
+  "after": 5030,
+  "writes_attempted": 40,
+  "writes_ok": 30,
+  "writes_failed": 10,
+  "write_availability_pct": 75.0,
+  "persisted_delta": 30,
+  "durable_no_loss": true
+}

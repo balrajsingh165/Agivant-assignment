@@ -3,7 +3,8 @@ pkg/*.tar.gz
 pkg/*.tgz
 pkg/tigergraph*/
 
-# License key (do not commit secrets)
+# License key / secrets (do not commit)
+.env
 *.license
 license.txt
 
@@ -11,6 +12,12 @@ license.txt
 results/*.log
 results/*.raw
 results/*.jsonl
+
+# Python / uv
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
 
 # OS noise
 .DS_Store

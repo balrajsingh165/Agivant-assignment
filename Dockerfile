@@ -5,7 +5,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         openssh-server sudo curl wget vim less jq \
         net-tools iputils-ping iproute2 dnsutils lsof \
-        cron tar gzip coreutils util-linux procps python3 sshpass ca-certificates \
+        cron tar gzip coreutils util-linux uuid-runtime procps python3 sshpass ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # tigergraph user with passwordless sudo (installer's sudo user)

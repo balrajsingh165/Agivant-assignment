@@ -1,0 +1,3 @@
+CREATE VERTEX Person (PRIMARY_ID id STRING, name STRING) WITH primary_id_as_attribute="true"
+CREATE UNDIRECTED EDGE Friendship (FROM Person, TO Person)
+CREATE GRAPH social (Person, Friendship)

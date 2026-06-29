@@ -4,11 +4,14 @@ services:
     image: tg-node:4.1
     container_name: tg1
     hostname: tg1
-    networks: [tgnet]
+    restart: unless-stopped          # survive Docker/host restarts
+    networks:
+      tgnet:
+        ipv4_address: 172.20.0.11    # static: the cluster is installed against these IPs
     mem_limit: 5g
-    cap_add: [NET_ADMIN]          # needed for tc/netem network-partition tests
+    cap_add: [NET_ADMIN]             # needed for network-partition tests
     ports:
-      - "14240:14240"           
+      - "14240:14240"               # GraphStudio / RESTPP gateway exposed to host
     volumes:
       - tg1data:/home/tigergraph
     tty: true
@@ -18,9 +21,14 @@ services:
     image: tg-node:4.1
     container_name: tg2
     hostname: tg2
-    networks: [tgnet]
+    restart: unless-stopped
+    networks:
+      tgnet:
+        ipv4_address: 172.20.0.12
     mem_limit: 5g
     cap_add: [NET_ADMIN]
+    ports:
+      - "14241:14240"               # tg2 gateway (observer when tg1 is the fault target)
     volumes:
       - tg2data:/home/tigergraph
     tty: true
@@ -30,9 +38,14 @@ services:
     image: tg-node:4.1
     container_name: tg3
     hostname: tg3
-    networks: [tgnet]
+    restart: unless-stopped
+    networks:
+      tgnet:
+        ipv4_address: 172.20.0.13
     mem_limit: 5g
     cap_add: [NET_ADMIN]
+    ports:
+      - "14242:14240"               # tg3 gateway (observer when tg1 is the fault target)
     volumes:
       - tg3data:/home/tigergraph
     tty: true
@@ -41,6 +54,9 @@ networks:
   tgnet:
     name: tgnet
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
 
 volumes:
   tg1data:
