@@ -1,0 +1,48 @@
+services:
+  tg1:
+    build: .
+    image: tg-node:4.1
+    container_name: tg1
+    hostname: tg1
+    networks: [tgnet]
+    mem_limit: 5g
+    cap_add: [NET_ADMIN]          # needed for tc/netem network-partition tests
+    ports:
+      - "14240:14240"           
+    volumes:
+      - tg1data:/home/tigergraph
+    tty: true
+
+  tg2:
+    build: .
+    image: tg-node:4.1
+    container_name: tg2
+    hostname: tg2
+    networks: [tgnet]
+    mem_limit: 5g
+    cap_add: [NET_ADMIN]
+    volumes:
+      - tg2data:/home/tigergraph
+    tty: true
+
+  tg3:
+    build: .
+    image: tg-node:4.1
+    container_name: tg3
+    hostname: tg3
+    networks: [tgnet]
+    mem_limit: 5g
+    cap_add: [NET_ADMIN]
+    volumes:
+      - tg3data:/home/tigergraph
+    tty: true
+
+networks:
+  tgnet:
+    name: tgnet
+    driver: bridge
+
+volumes:
+  tg1data:
+  tg2data:
+  tg3data:

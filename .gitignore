@@ -1,0 +1,17 @@
+# TigerGraph install package (too big for git; download separately)
+pkg/*.tar.gz
+pkg/*.tgz
+pkg/tigergraph*/
+
+# License key (do not commit secrets)
+*.license
+license.txt
+
+# Raw test output / logs
+results/*.log
+results/*.raw
+results/*.jsonl
+
+# OS noise
+.DS_Store
+Thumbs.db
