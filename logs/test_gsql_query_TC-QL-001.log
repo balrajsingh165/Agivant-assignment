@@ -1,0 +1,7 @@
+TEST      : tests/test_gsql_queries.py::test_gsql_query[TC-QL-001]
+OUTCOME   : PASSED
+DURATION  : 3.26s
+
+EXPECTED vs OBSERVED
+  - point lookup by primary id: expected=error-free result | observed=ok
+

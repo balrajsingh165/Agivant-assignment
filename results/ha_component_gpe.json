@@ -1,0 +1,16 @@
+{
+  "total": 181,
+  "ok": 181,
+  "failed": 0,
+  "availability_pct": 100.0,
+  "outages": [],
+  "downtime_s": 0,
+  "mttd_s": null,
+  "mttr_s": null,
+  "scenario": "ha_component_gpe",
+  "fault": "component",
+  "target": "tg2",
+  "observer": "tg1",
+  "ha_mode": "HA",
+  "recovered": true
+}

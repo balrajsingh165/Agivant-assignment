@@ -1,0 +1,7 @@
+TEST      : tests/test_gsql_queries.py::test_gsql_query[TC-QL-003]
+OUTCOME   : PASSED
+DURATION  : 0.94s
+
+EXPECTED vs OBSERVED
+  - aggregation over all Person: expected=error-free result | observed=ok
+

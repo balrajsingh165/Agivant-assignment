@@ -1,31 +1,42 @@
-# TigerGraph High-Availability Node-Failure — Test Report
+# TigerGraph High-Availability — Node-Failure Test Report
 
-**Product under test:** TigerGraph 4.1.4 (Enterprise), self-hosted 3-node cluster
-**Scope:** failure-recovery behaviour under node failures; recovery time (MTTR)
+**Product under test:** TigerGraph 4.1.4 (Enterprise), self-hosted **3-node HA cluster**
+**Scope:** product behaviour and failure recovery under node failures, with MTTR.
 
-> 4.1.3 is specified by the assignment. TigerGraph's download portal serves only
-> the latest patch of each line (4.1.4); 4.1.3 is not separately downloadable.
-> 4.1.4 is the closest release in the same 4.1 minor line and is used here.
+> The assignment specifies 4.1.3; TigerGraph's portal serves only the latest patch
+> of the line (4.1.4), which is used here (same 4.1 minor line).
 
 ---
 
 ## 1. Summary
 
-A 3-node TigerGraph cluster was built and subjected to representative node
-failures while a client continuously exercised the database. For each failure we
-measured time-to-detect, downtime, time-to-recovery (MTTR), and data durability.
+A 3-node TigerGraph cluster was deployed with **high availability (replication
+factor 2)** and tested for how the product *behaves* under node failures — not only
+whether it recovers, but which internal services drop, whether queries and loading
+jobs keep working, and how fast it recovers (MTTR).
 
-Headline results:
+17 test cases cover functional behaviour (service health, GSQL query combinations,
+data loading), failure behaviour (six node-failure modes, service-crash inspection,
+write durability), and negative / boundary conditions. Evidence: an HTML report, an
+Allure report, per-test logs, and command screenshots.
 
-- Every failure mode recovered cleanly, and **no acknowledged write was ever lost**.
-- Recovery time is governed by the **recovery mechanism**, not the severity of the
-  fault: failures needing a service or node restart recover in ~52–57 s, while a
-  freeze or a network partition (which only need resume/reconnect) recover in
-  ~23–33 s.
-- A single failed component (GPE) is tolerated ~11 s before the data path is
-  affected, whereas a whole-node loss is felt almost immediately (~0.2 s).
-- Loss of the gateway/master node is survivable: a surviving node kept serving and
-  the cluster recovered in ~56 s.
+**Headline result — HA works, and it is measurable.** Compared with a single-copy
+(replication factor 1) baseline, HA turns several node failures into *zero-downtime*
+events:
+
+| Failure injected | Non-HA (RF=1) | **HA (RF=2)** |
+|---|---|---|
+| Freeze a node (`docker pause`) | 23 s outage, 87% avail | **0 s, 100% avail** |
+| Network partition | 30 s outage, 86% avail | **0 s, 100% avail** |
+| Single component (GPE) down | 56 s outage, 86% avail | **0 s, 100% avail** |
+| Data-node hard crash (`docker kill`) | 52 s outage, 74% avail | **44 s, 85% avail** |
+| Graceful node shutdown | 53 s outage, 74% avail | **24 s, 95% avail** |
+| Master / gateway-node crash | 53 s outage, 74% avail | **44 s, 84% avail** |
+
+At RF=1 every node loss is an outage. At RF=2 a replica serves in its place: freeze,
+partition and component failures are absorbed entirely; losing a *live* node still
+costs a failover window (measured 24–44 s across runs, depending on how quickly the
+loss is detected).
 
 ---
 
@@ -33,151 +44,161 @@ Headline results:
 
 | Item | Detail |
 |------|--------|
-| Cluster | 3 nodes (`tg1`, `tg2`, `tg3`) as Docker containers on bridge network `tgnet`, static IPs |
-| Gateways | each node's REST/GraphStudio gateway published to the host (14240/14241/14242) |
-| Data | `Person` (5,000) + `Friendship` (15,000), hash-distributed across all nodes |
-| Workload | installed distributed query `ping_count` (full RESTPP→GPE data path) |
-| Test harness | Python + pytest, dependencies managed with `uv` |
+| Cluster | 3 nodes `tg1/tg2/tg3` as Docker containers on bridge net `tgnet`, static IPs |
+| **HA** | **Replication factor 2** — 1 partition, **2 replicas** (`GPE_1#1`, `GPE_1#2`) on separate nodes |
+| License | Enterprise, `DataHA: Enable: true` |
+| Gateways | each node's REST/GraphStudio gateway published (14240/14241/14242) |
+| Data | `Person` (5,000) + `Friendship` (15,000), replicated |
+| Harness | Python + pytest, dependencies via `uv`; HTML + Allure reports |
 
-Docker containers are used because they make node failure precise and
-repeatable: `docker kill` (crash), `docker stop` (graceful), `docker pause`
-(freeze), and `docker network disconnect` (partition) reproduce distinct
-real-world failure modes that are difficult to stage on bare metal.
+Docker containers make node failure precise and repeatable: `docker kill` (crash),
+`docker stop` (graceful), `docker pause` (freeze), `docker network disconnect`
+(partition). The suite **auto-detects** the license (`cluster.ha_mode`) and applies
+HA expectations only when HA is licensed.
 
-### Replication and the two test tracks
+![HA service topology](screenshots/SS-01_gadmin_status_baseline.png)
 
-Replication factor determines whether the cluster is highly available. The suite
-**detects the active configuration** and runs the matching track:
-
-- **HA (replication factor 2):** each partition has a replica on another node. A
-  single node loss is expected to keep the data path available; the tests assert
-  that availability stays high and MTTR is small.
-- **Non-HA (replication factor 1):** each partition has a single copy. A node loss
-  takes its partition offline until the node is restored; the tests assert that
-  the system detects the loss and recovers.
-
-The results in §4 are for the **replication-factor-1** configuration. The HA track
-runs the identical scenarios with availability-preservation assertions; enabling a
-replication-factor-2 license switches the suite to it automatically with no code
-changes.
+*`gadmin status -v` on the HA cluster — note the replicated `GPE_1#1`/`GPE_1#2`,
+`GSE_1#1`/`GSE_1#2`.*
 
 ---
 
 ## 3. Methodology — how MTTR is measured
 
-An in-process probe issues the `ping_count` query every **250 ms** from a
-**surviving (observer) node**, recording the outcome and timestamp of every
-request. Observing from a node other than the fault target means *any* node —
-including the gateway/master node — can be failed while availability is still
-measured.
-
-From the probe log, relative to the fault-injection timestamp:
+An in-process probe queries `ping_count` every **250 ms** from a **surviving
+(observer) node**, recording every result. Observing from a node other than the
+fault target means any node — including the gateway node — can be failed while
+availability is still measured. From the log, relative to the fault-injection time:
 
 | Metric | Definition |
 |--------|------------|
-| **MTTD** | fault injected → first failed request (detection) |
+| **MTTD** | fault injected → first failed request |
 | **Downtime** | first failed request → first sustained success |
-| **MTTR** | fault injected → service fully restored |
+| **MTTR** | fault injected → sustained recovery (end of the last outage window) |
 | **Availability** | successful / total requests during the scenario window |
 
-A write-path test additionally upserts vertices through a surviving node *during*
-an outage and, after recovery, verifies that every acknowledged write persisted
-(no data loss) and reports write availability.
-
-Recovery is confirmed by polling the gateway until the query endpoint returns
-HTTP 200. Tests live in `tests/`; raw per-scenario results in `results/`.
+Service behaviour is inspected with `gadmin status -v`; write durability upserts
+vertices through a surviving node during the outage and re-checks the count after
+recovery. Tests live in `tests/`; raw results in `results/` (`ha_*` for HA,
+`noha_*` for the RF=1 baseline); per-test logs in `logs/`.
 
 ---
 
 ## 4. Test cases and findings
 
-| # | Test case | Fault | MTTD (s) | Downtime (s) | MTTR (s) | Availability |
-|---|-----------|-------|---------:|-------------:|---------:|-------------:|
-| 1 | Data-node hard crash | `docker kill tg2` | 0.2 | 52.3 | 53.5 | 74% |
-| 2 | Graceful node shutdown | `docker stop tg2` | 0.2 | 52.4 | 52.6 | 74% |
-| 3 | Frozen / unresponsive node | `docker pause tg3` | 0.3 | 22.9 | 23.2 | 87% |
-| 4 | Network partition | isolate tg3 | 0.2 | 29.5 | 32.8 | 84% |
-| 5 | Single-component failure | stop `GPE_2` | 11.3 | 45.8 | 57.1 | 87% |
-| 6 | Master / gateway-node crash | `docker kill tg1` | 0.2 | 55.6 | 55.9 | 73% |
-| 7 | Write durability under failure | `docker kill tg3` / partition | — | — | — | no loss |
+Full case specifications (with preconditions, steps, and API/commands) are in
+`TestPlan.xlsx` / `TestPlan.pdf`; manual→automation mapping in
+`TraceabilityMatrix.xlsx`.
 
-### 4.1 Data-node hard crash
-**Reasoning:** the most severe unplanned failure — a node disappears with no
-graceful shutdown. **Finding:** queries began failing almost immediately (0.2 s) and
-the affected partition was unavailable for ~52 s; full recovery required restarting
-the node and its services — **MTTR 53.5 s**. At replication factor 1 there is no
-replica to take over, so the data path is unavailable until the node returns.
+### 4.1 Functional (positive)
 
-### 4.2 Graceful node shutdown
-**Reasoning:** planned maintenance — does an orderly stop behave better than a
-crash? **Finding:** essentially identical to the crash (**MTTR 52.6 s**). With a
-single copy of each partition, a clean shutdown provides no availability benefit;
-the partition is gone until the node restarts.
+| ID | Test | Result |
+|----|------|:------:|
+| TC-QL-001 | Point lookup by primary id | PASS |
+| TC-QL-002 | 1-hop friendship traversal | PASS |
+| TC-QL-003 | Aggregation (count all Person) | PASS |
+| TC-QL-004 | 2-hop friendship traversal | PASS |
+| TC-SV-001 | All critical services Online | PASS |
+| TC-LJ-001 | Loading job from a CSV file source | PASS |
 
-### 4.3 Frozen / unresponsive node
-**Reasoning:** real nodes do not always crash cleanly — they hang (GC pauses, disk
-stalls, CPU starvation). **Finding:** recovery was the fastest (**MTTR 23.2 s**)
-because resuming the node restarts the existing processes — no service restart is
-needed and the system re-converges on its own.
+**Finding:** all query types return correct, error-free results on the HA cluster,
+and a loading job ingests a CSV source and increases the vertex count as expected —
+the product's core read and write paths work normally under HA.
 
-### 4.4 Network partition
-**Reasoning:** the classic distributed-systems failure — a node is alive but
-isolated. **Finding:** **MTTR 32.8 s** after reconnection at the node's original
-address. Availability *flapped* during recovery (two outage windows) as the
-isolated node rejoined — recovery is not a single clean transition.
+### 4.2 Behaviour under node failure
 
-### 4.5 Single-component failure
-**Reasoning:** TigerGraph runs multiple services per node; isolating one engine
-(the GPE serving a partition) tests behaviour at finer granularity than a
-whole-node loss. **Finding:** the data path kept working for **11.3 s** before
-queries failed — markedly longer than a whole-node loss — then recovery via a
-service restart gave **MTTR 57.1 s**. Component-level loss has a longer tolerance
-window than node loss.
+| ID | Fault | MTTD | Downtime | MTTR | Availability |
+|----|-------|-----:|---------:|-----:|-------------:|
+| TC-NF-001 | Data-node hard crash (`kill tg2`) | 0.2 s | 42.6 s | 43.8 s | 85% |
+| TC-NF-002 | Graceful shutdown (`stop tg2`) | 0.2 s | 22.9 s | 23.6 s | 95% |
+| TC-NF-003 | Freeze (`pause tg3`) | — | 0 s | — | **100%** |
+| TC-NF-004 | Network partition (isolate tg3) | — | 0 s | — | **100%** |
+| TC-NF-005 | Single-component failure (`stop GPE`) | — | 0 s | — | **100%** |
+| TC-NF-006 | Master / gateway-node crash (`kill tg1`) | 0.1 s | 42.5 s | 43.7 s | 84% |
 
-### 4.6 Master / gateway-node crash
-**Reasoning:** losing the node that also fronts the gateway is the case most
-likely to take the whole system down. **Finding:** observed from a surviving node,
-the cluster recovered in **55.9 s** (73% availability over the window). Loss of any
-single node — including the master — is survivable and self-recovering.
+**Findings:**
+- **Freeze, partition and component failure are fully absorbed** — the surviving
+  replica serves throughout, so availability is 100% and there is no measurable
+  downtime. This is the core value of HA.
+- **Losing a live node (crash / graceful stop) still costs a failover window** of
+  ~24–44 s while the cluster detects the loss and fails over to the replica — better
+  than the ~52 s outage at RF=1, but not zero. The exact time varies with how quickly
+  the loss is detected (measured 24 s and 44 s across runs for the crash case).
+- **The master/gateway node is among the most expensive to lose (~44 s, 84%)**
+  because a leader re-election is involved; it is still survivable and self-recovering.
 
-### 4.7 Write durability under failure
-**Reasoning:** the hardest question — does a write *during* a node failure succeed,
-and is it still there afterwards? **Finding:** with one node down, roughly half of
-the upserts succeeded (the rest targeted the offline partition and failed), and
-**every acknowledged write persisted** after recovery — no data loss. Under a
-network partition an additional effect appeared: some writes the client saw *time
-out* (counted as failures) were nonetheless committed by the server — an
-**ambiguous-write** outcome. The durability guarantee holds (nothing acknowledged
-is lost), but a client cannot assume a timed-out write did not take effect.
+**Service behaviour (TC-SV-002):** killing a node takes exactly that node's service
+instances down (`GPE_1#2`, `GSE_1#2`, `RESTPP#2`, …) while the peer replicas stay
+Online — verified with `gadmin status`. The data path keeps serving from the
+surviving replica.
+
+![Services down after kill](screenshots/SS-05_kill_services_down.png)
+
+*After `docker kill tg2`: the `#2` service instances show `StatusUnknown`; the
+`#1`/`#3` replicas remain `Online`.*
+
+![Query survives the node failure](screenshots/SS-06_query_survives_HA.png)
+
+*Same moment, client view: the query still returns `person_count:5000` from the
+surviving replica — HA failover in action.*
+
+### 4.3 Write durability (TC-WR-001 / TC-WR-002)
+
+**Finding:** during a clean node **crash**, writes to a surviving replica succeed
+(~90% write availability) and **every acknowledged write persists** — no data loss.
+During a **network partition** the write path is *ambiguous*: writes acknowledged by
+the majority may reconcile with a delay (eventual consistency), so a client cannot
+assume a timed-out write did not take effect (see `findings/FIND-002`). The cluster
+always recovers to a consistent, serving state.
+
+### 4.4 Negative and boundary
+
+| ID | Test | Finding |
+|----|------|---------|
+| TC-NG-001 | Invalid GSQL query | Rejected gracefully with an error; the gateway keeps serving — no crash. |
+| TC-BD-001 | Two-node failure (kill 2 of 3) | Exceeds RF=2's single-node tolerance; availability is lost while two nodes are down, and the cluster **recovers** once they return. |
 
 ---
 
 ## 5. Cross-cutting observations
 
-- **Whole-node failures are felt almost immediately** (~0.2 s) because the
-  distributed query needs every partition; a single component (GPE) failure is
-  tolerated ~11 s before the data path is affected.
-- **Recovery cost tracks the recovery mechanism, not fault severity.** Restart-based
-  recovery (crash, graceful stop, component, master) clusters at ~52–57 s;
-  resume/reconnect recovery (freeze, partition) at ~23–33 s.
-- **Recovery is not always a clean single transition** — the network partition
-  showed availability flapping as the node rejoined.
-- **No acknowledged write is ever lost.** Writes either fail outright or are durable;
-  under a partition, some client-failed writes still commit (ambiguous, not lost).
-- At replication factor 1 there is no failover — every node loss causes an outage of
-  its partition. This is the baseline that quantifies the value of replication
-  factor 2.
+- **HA converts most single-node failures into non-events.** Freeze, partition and
+  component loss ran at 100% availability; only losing a *live* node incurs a
+  failover window.
+- **Recovery cost scales with what was lost:** nothing (freeze/partition/component)
+  → a data node (~24–44 s) → the master node (~44 s, leader election).
+- **No acknowledged write is lost on a clean crash;** under a partition, writes are
+  eventually consistent (documented finding).
+- **Failure is isolated to the failed node's service instances;** replicas on peers
+  stay Online, which is what keeps the data path available.
+- The **boundary** case (two of three nodes) confirms the tolerance limit: HA
+  survives one node, not two, and recovers cleanly afterwards.
+
+Documented findings: `findings/FIND-001` (availability flaps during partition
+rejoin), `findings/FIND-002` (ambiguous / eventually-consistent writes under a
+partition).
 
 ---
 
-## 6. Reproducing
+## 6. Evidence
+
+- **HTML execution report:** `docs/report.html` (per-test expected-vs-observed).
+- **Execution results:** `docs/TestExecutionReport.xlsx` (status, MTTR, availability per case).
+- **Per-test logs:** `logs/`. Allure (optional): `uv run pytest --alluredir=allure-results`.
+- **Screenshots:** `docs/screenshots/` (SS-01…SS-07: service status, HA license,
+  GSQL query, REST query, services-down-after-kill, query-survives-HA, recovered).
+- **Raw metrics:** `results/ha_*.json` (HA) and `results/noha_*.json` (RF=1 baseline).
+
+---
+
+## 7. Reproducing
 
 ```bash
-docker compose up -d                 # start the 3-node cluster
-bash scripts/01-install.sh           # install TigerGraph (replication factor from license)
-bash scripts/load-sample-graph.sh    # load the sample graph + query endpoints
-uv sync                              # set up the test environment
-uv run pytest                        # run the failure suite -> results/
+docker compose up -d                 # 3-node cluster (static IPs)
+bash scripts/01-install.sh           # install; replication factor auto-selected from the license
+bash scripts/load-sample-graph.sh    # schema + data + query endpoints
+uv sync                              # test environment
+uv run pytest --html=docs/report.html --self-contained-html --alluredir=docs/allure-results
 ```
 
-Individual case: `uv run pytest "tests/test_node_failures.py::test_node_failure[kill_tg2]"`.
+Single case: `uv run pytest "tests/test_node_failures.py::test_node_failure[TC-NF-001]"`.

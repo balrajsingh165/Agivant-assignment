@@ -65,3 +65,20 @@ def person_count(node=MASTER):
             return json.loads(r.read())["results"][0]["person_count"]
     except Exception:
         return None
+
+
+def gsql(command, graph="social", timeout=180):
+    """Run a GSQL command/query on the master; return stdout."""
+    g = f"-g {graph} " if graph else ""
+    esc = command.replace("'", "'\\''")
+    return docker_exec(MASTER, f"export PATH=$PATH:{GADMIN_DIR}; gsql {g}'{esc}'", timeout=timeout).stdout
+
+
+def service_states(node=MASTER):
+    """Parse `gadmin status -v` into {service_name: status} (e.g. GPE_1#1 -> Online)."""
+    states = {}
+    for line in gadmin("status -v").stdout.splitlines():
+        cells = [c.strip() for c in line.split("|") if c.strip()]
+        if len(cells) >= 2 and cells[1] in ("Online", "Offline", "Warmup", "Down", "Stopped"):
+            states[cells[0]] = cells[1]
+    return states

@@ -1,0 +1,8 @@
+TEST      : tests/test_negative_boundary.py::test_invalid_query_rejected
+OUTCOME   : PASSED
+DURATION  : 0.82s
+
+EXPECTED vs OBSERVED
+  - invalid query rejected: expected=error reported | observed=rejected
+  - cluster still serving after bad query: expected=True | observed=True
+

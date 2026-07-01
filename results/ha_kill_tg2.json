@@ -1,0 +1,42 @@
+{
+  "total": 88,
+  "ok": 75,
+  "failed": 13,
+  "availability_pct": 85.23,
+  "outages": [
+    {
+      "start": 1782909648.746,
+      "end": 1782909655.3,
+      "seconds": 6.55
+    },
+    {
+      "start": 1782909655.565,
+      "end": 1782909665.388,
+      "seconds": 9.82
+    },
+    {
+      "start": 1782909665.651,
+      "end": 1782909675.461,
+      "seconds": 9.81
+    },
+    {
+      "start": 1782909675.727,
+      "end": 1782909685.548,
+      "seconds": 9.82
+    },
+    {
+      "start": 1782909685.814,
+      "end": 1782909692.365,
+      "seconds": 6.55
+    }
+  ],
+  "downtime_s": 42.56,
+  "mttd_s": 0.2,
+  "mttr_s": 43.82,
+  "scenario": "ha_kill_tg2",
+  "fault": "kill",
+  "target": "tg2",
+  "observer": "tg1",
+  "ha_mode": "HA",
+  "recovered": true
+}

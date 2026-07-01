@@ -1,0 +1,15 @@
+{
+  "scenario": "ha_wkill_tg3",
+  "ha_mode": "HA",
+  "fault": "kill",
+  "target": "tg3",
+  "before": 5760,
+  "after": 5800,
+  "writes_attempted": 40,
+  "writes_ok": 37,
+  "writes_failed": 3,
+  "write_availability_pct": 92.5,
+  "persisted_delta": 40,
+  "ambiguous_writes": 3,
+  "durable_no_loss": true
+}

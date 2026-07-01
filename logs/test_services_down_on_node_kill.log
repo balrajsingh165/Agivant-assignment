@@ -1,0 +1,8 @@
+TEST      : tests/test_service_health.py::test_services_down_on_node_kill
+OUTCOME   : PASSED
+DURATION  : 84.36s
+
+EXPECTED vs OBSERVED
+  - killed node's services go down: expected=>0 services down | observed=1 down: ['EXE_2']
+  - a GPE replica stays Online (HA): expected=True | observed=True
+

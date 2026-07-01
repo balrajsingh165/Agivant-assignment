@@ -1,0 +1,9 @@
+TEST      : tests/test_node_failures.py::test_node_failure[TC-NF-006]
+OUTCOME   : PASSED
+DURATION  : 60.80s
+
+EXPECTED vs OBSERVED
+  - recovered: expected=True | observed=True
+  - MTTR (s): expected=finite; cluster recovers | observed=43.69
+  - availability %: expected=>=90 (HA) | observed=83.75
+

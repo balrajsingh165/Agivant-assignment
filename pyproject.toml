@@ -5,8 +5,19 @@ description = "TigerGraph high-availability node-failure test harness"
 requires-python = ">=3.10"
 dependencies = [
     "pytest>=8.0",
+    "pytest-html>=4.1",
+    "allure-pytest>=2.13",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v -ra --tb=short"
+markers = [
+    "node_failure: node-failure recovery tests (read availability + MTTR)",
+    "write_durability: write-path durability tests",
+    "gsql: GSQL query-combination functional tests",
+    "service_health: service status / crash behaviour tests",
+    "loading_job: data loading job tests",
+    "negative: negative-path tests",
+    "boundary: boundary / limit tests",
+]

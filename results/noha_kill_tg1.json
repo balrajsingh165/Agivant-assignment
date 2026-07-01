@@ -1,18 +1,18 @@
 {
-  "total": 63,
-  "ok": 46,
-  "failed": 17,
-  "availability_pct": 73.02,
+  "total": 61,
+  "ok": 45,
+  "failed": 16,
+  "availability_pct": 73.77,
   "outages": [
     {
-      "start": 1782760250.841,
-      "end": 1782760306.449,
-      "seconds": 55.61
+      "start": 1782897260.592,
+      "end": 1782897312.928,
+      "seconds": 52.34
     }
   ],
-  "downtime_s": 55.61,
-  "mttd_s": 0.24,
-  "mttr_s": 55.85,
+  "downtime_s": 52.34,
+  "mttd_s": 0.18,
+  "mttr_s": 52.52,
   "scenario": "noha_kill_tg1",
   "fault": "kill",
   "target": "tg1",

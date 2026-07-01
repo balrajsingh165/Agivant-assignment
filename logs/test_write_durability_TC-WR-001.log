@@ -1,0 +1,8 @@
+TEST      : tests/test_write_durability.py::test_write_durability[TC-WR-001]
+OUTCOME   : PASSED
+DURATION  : 50.64s
+
+EXPECTED vs OBSERVED
+  - write availability %: expected=writes to live replicas succeed | observed=92.5
+  - acknowledged writes persisted (delta >= ok): expected=True (clean crash) | observed=True
+

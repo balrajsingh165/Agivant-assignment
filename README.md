@@ -20,20 +20,17 @@ tg2 172.20.0.12  ->  host 14241        topology: 1 partition x 2 replicas (HA)
 tg3 172.20.0.13  ->  host 14242                   or 3 x 1 (non-HA)
 ```
 
-## HA is optional and auto-detected
+## High availability
 
-HA depends on the license's replication entitlement. The suite **detects the
-active configuration** and runs the matching track with no manual switches:
+The cluster runs at **replication factor 2** (1 partition, 2 replicas on separate
+nodes). The installer selects the replication factor from the license: RF=2 when
+the license enables Data HA, otherwise RF=1. The suite **auto-detects** the mode
+(`cluster.ha_mode`) and applies HA expectations only when HA is licensed, so the
+same tests characterise either configuration.
 
-- **License enables HA** → cluster installs at replication factor 2 and the suite
-  runs the HA track (a node loss should keep the data path available; MTTR in
-  seconds).
-- **Otherwise** → cluster installs at replication factor 1 and the suite runs the
-  non-HA baseline (a node loss takes its partition offline until restored). The
-  HA-only assertions are skipped.
-
-Provide an HA-capable license and the HA tests run automatically; without one they
-are skipped and the baseline runs. See `docs/REPORT.md`.
+Result (see `docs/REPORT.md`): under HA, freeze / partition / component failures run
+at **100% availability with zero downtime** (a replica serves), while losing a live
+node costs a short failover window (~24 s) — versus ~52 s outages at RF=1.
 
 ## Layout
 
@@ -45,16 +42,31 @@ scripts/
   load-sample-graph.sh           schema + data + distributed query endpoints
   sample-graph/*.gsql            schema, loading job, queries
   lib.sh                         shared shell helpers for the setup scripts
+  build_report.py                render docs/report.html from results/
+  build_deliverables.py          render TestPlan.xlsx/.pdf + TraceabilityMatrix.xlsx + bug docx
 tigergraph_ha/                   test harness package
-  cluster.py                     docker / gadmin access + HA detection
+  cluster.py                     docker / gadmin access + HA detection + gsql/service state
   faults.py                      fault injection and recovery
   probe.py                       availability probe + MTTR analysis
   scenario.py                    read- and write-path failure scenarios
-tests/                           pytest suite
-  test_node_failures.py          read availability + MTTR per failure mode
-  test_write_durability.py       write availability + data durability
-results/                         per-scenario result JSON
-docs/                            REPORT.md, SETUP.md, install template
+tests/                           pytest suite (17 cases; ids TC-QL/SV/LJ/NF/WR/NG/BD-*)
+  test_gsql_queries.py           GSQL query combinations (functional)
+  test_service_health.py         service status + crash behaviour
+  test_loading_job.py            loading job from a CSV source
+  test_node_failures.py          6 node-failure modes: availability + MTTR
+  test_write_durability.py       write availability + durability under failure
+  test_negative_boundary.py      invalid query; two-node boundary
+results/                         per-scenario JSON (ha_* HA, noha_* RF=1 baseline)
+logs/                            per-test logs
+docs/
+  REPORT.md                      test report (HA results, comparison, findings, MTTR)
+  TestPlan.md / .xlsx / .pdf     test cases (email format: ID, precondition, steps, API)
+  TraceabilityMatrix.xlsx        manual test case -> automation mapping
+  report.html                    pytest HTML execution report
+  TestExecutionReport.xlsx       per-case results (status, MTTR, availability)
+  screenshots/                   command evidence screenshots (SS-01..SS-12)
+  findings/                      bug/finding reports (FIND-*.md and .docx)
+  SETUP.md, install_conf.template.json
 ```
 
 ## Quick start
@@ -69,6 +81,16 @@ uv run pytest                        # 5. run the failure suite -> results/
 
 Prerequisites (license + install package) are in `docs/SETUP.md`. Running the
 3-node cluster plus the suite needs roughly 16 GB of free memory.
+
+**Reports:**
+- HTML execution report: `uv run pytest --html=docs/report.html --self-contained-html` (committed at `docs/report.html`)
+- Allure (optional): `uv run pytest --alluredir=allure-results` then `allure serve allure-results`
+- Per-test logs land in `logs/`.
+
+**Office deliverables** (test plan xlsx+pdf, traceability matrix, bug reports):
+`uv run --with openpyxl --with python-docx --with reportlab python scripts/build_deliverables.py`
+
+**Screenshots** of the executed commands are in `docs/screenshots/`.
 
 ## Measurement
 

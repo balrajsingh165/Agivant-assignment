@@ -1,0 +1,8 @@
+TEST      : tests/test_loading_job.py::test_loading_job_file_source
+OUTCOME   : PASSED
+DURATION  : 10.63s
+
+EXPECTED vs OBSERVED
+  - loading job status: expected=LOAD SUCCESSFUL | observed=ok
+  - vertex count increased: expected=+200 | observed=5559 -> 5760
+

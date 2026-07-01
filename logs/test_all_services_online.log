@@ -1,0 +1,7 @@
+TEST      : tests/test_service_health.py::test_all_services_online
+OUTCOME   : PASSED
+DURATION  : 6.78s
+
+EXPECTED vs OBSERVED
+  - all critical services Online: expected=all Online | observed=10/10 Online
+

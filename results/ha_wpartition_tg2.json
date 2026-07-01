@@ -1,0 +1,15 @@
+{
+  "scenario": "ha_wpartition_tg2",
+  "ha_mode": "HA",
+  "fault": "partition",
+  "target": "tg2",
+  "before": 5800,
+  "after": 5840,
+  "writes_attempted": 40,
+  "writes_ok": 34,
+  "writes_failed": 6,
+  "write_availability_pct": 85.0,
+  "persisted_delta": 40,
+  "ambiguous_writes": 6,
+  "durable_no_loss": true
+}

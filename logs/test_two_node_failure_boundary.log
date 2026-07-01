@@ -1,0 +1,8 @@
+TEST      : tests/test_negative_boundary.py::test_two_node_failure_boundary
+OUTCOME   : PASSED
+DURATION  : 88.76s
+
+EXPECTED vs OBSERVED
+  - availability with 2/3 nodes down: expected=likely lost (exceeds RF=2) | observed=unavailable
+  - cluster recovers after both nodes return: expected=True | observed=True
+

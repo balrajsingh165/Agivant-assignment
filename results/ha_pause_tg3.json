@@ -1,0 +1,16 @@
+{
+  "total": 137,
+  "ok": 137,
+  "failed": 0,
+  "availability_pct": 100.0,
+  "outages": [],
+  "downtime_s": 0,
+  "mttd_s": null,
+  "mttr_s": null,
+  "scenario": "ha_pause_tg3",
+  "fault": "pause",
+  "target": "tg3",
+  "observer": "tg1",
+  "ha_mode": "HA",
+  "recovered": true
+}

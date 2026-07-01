@@ -1,0 +1,7 @@
+TEST      : tests/test_gsql_queries.py::test_gsql_query[TC-QL-004]
+OUTCOME   : PASSED
+DURATION  : 0.87s
+
+EXPECTED vs OBSERVED
+  - 2-hop friendship traversal: expected=error-free result | observed=ok
+
