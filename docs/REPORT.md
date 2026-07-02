@@ -24,19 +24,19 @@ Allure report, per-test logs, and command screenshots.
 (replication factor 1) baseline, HA turns several node failures into *zero-downtime*
 events:
 
-| Failure injected | Non-HA (RF=1) | **HA (RF=2)** |
+| Failure injected | Non-HA (RF=1) | **HA (RF=2)** — median of 3 runs |
 |---|---|---|
 | Freeze a node (`docker pause`) | 23 s outage, 87% avail | **0 s, 100% avail** |
 | Network partition | 30 s outage, 86% avail | **0 s, 100% avail** |
 | Single component (GPE) down | 56 s outage, 86% avail | **0 s, 100% avail** |
-| Data-node hard crash (`docker kill`) | 52 s outage, 74% avail | **44 s, 85% avail** |
+| Data-node hard crash (`docker kill`) | 52 s outage, 74% avail | **24 s, 95% avail** |
 | Graceful node shutdown | 53 s outage, 74% avail | **24 s, 95% avail** |
-| Master / gateway-node crash | 53 s outage, 74% avail | **44 s, 84% avail** |
+| Master / gateway-node crash | 53 s outage, 74% avail | **24 s, 95% avail** |
 
 At RF=1 every node loss is an outage. At RF=2 a replica serves in its place: freeze,
-partition and component failures are absorbed entirely; losing a *live* node still
-costs a failover window (measured 24–44 s across runs, depending on how quickly the
-loss is detected).
+partition and component failures are absorbed entirely (100% availability in all
+nine runs), and losing a *live* node — including the master — costs a failover
+window of ~24 s median (worst observed 44 s).
 
 ---
 
@@ -77,6 +77,10 @@ availability is still measured. From the log, relative to the fault-injection ti
 | **MTTR** | fault injected → sustained recovery (end of the last outage window) |
 | **Availability** | successful / total requests during the scenario window |
 
+Because detection and failover times vary run to run, **each failure scenario was
+executed three times** (`scripts/measure_mttr.py`); the report gives the **median**
+with the min–max spread. Individual runs are kept under `results/runs/`.
+
 Service behaviour is inspected with `gadmin status -v`; write durability upserts
 vertices through a surviving node during the outage and re-checks the count after
 recovery. Tests live in `tests/`; raw results in `results/` (`ha_*` for HA,
@@ -107,25 +111,29 @@ the product's core read and write paths work normally under HA.
 
 ### 4.2 Behaviour under node failure
 
-| ID | Fault | MTTD | Downtime | MTTR | Availability |
-|----|-------|-----:|---------:|-----:|-------------:|
-| TC-NF-001 | Data-node hard crash (`kill tg2`) | 0.2 s | 42.6 s | 43.8 s | 85% |
-| TC-NF-002 | Graceful shutdown (`stop tg2`) | 0.2 s | 22.9 s | 23.6 s | 95% |
-| TC-NF-003 | Freeze (`pause tg3`) | — | 0 s | — | **100%** |
-| TC-NF-004 | Network partition (isolate tg3) | — | 0 s | — | **100%** |
-| TC-NF-005 | Single-component failure (`stop GPE`) | — | 0 s | — | **100%** |
-| TC-NF-006 | Master / gateway-node crash (`kill tg1`) | 0.1 s | 42.5 s | 43.7 s | 84% |
+*(Median of 3 runs per scenario; spread in brackets.)*
+
+| ID | Fault | Downtime | MTTR (median) | MTTR (min–max) | Availability |
+|----|-------|---------:|--------------:|---------------:|-------------:|
+| TC-NF-001 | Data-node hard crash (`kill tg2`) | 22.9 s | 23.9 s | 23.5–30.5 s | 95% |
+| TC-NF-002 | Graceful shutdown (`stop tg2`) | 23.0 s | 23.7 s | 23.7–24.0 s | 95% |
+| TC-NF-003 | Freeze (`pause tg3`) | 0 s | — | 0 in all runs | **100%** |
+| TC-NF-004 | Network partition (isolate tg3) | 0 s | — | 0 in all runs | **100%** |
+| TC-NF-005 | Single-component failure (`stop GPE`) | 0 s | — | 0 in all runs | **100%** |
+| TC-NF-006 | Master / gateway-node crash (`kill tg1`) | 22.9 s | 23.9 s | 23.9–44.0 s | 95% |
 
 **Findings:**
 - **Freeze, partition and component failure are fully absorbed** — the surviving
-  replica serves throughout, so availability is 100% and there is no measurable
-  downtime. This is the core value of HA.
-- **Losing a live node (crash / graceful stop) still costs a failover window** of
-  ~24–44 s while the cluster detects the loss and fails over to the replica — better
-  than the ~52 s outage at RF=1, but not zero. The exact time varies with how quickly
-  the loss is detected (measured 24 s and 44 s across runs for the crash case).
-- **The master/gateway node is among the most expensive to lose (~44 s, 84%)**
-  because a leader re-election is involved; it is still survivable and self-recovering.
+  replica served throughout in every run (nine of nine at 100% availability, zero
+  downtime). This is the core value of HA.
+- **Losing a live node costs a consistent ~24 s failover window** (median across
+  crash, graceful stop, and master-node loss) while the cluster detects the loss and
+  fails over to the replica — half the ~52 s outage at RF=1, but not zero.
+- **Failover time has a tail:** the worst observed recovery was ~44 s (one master-node
+  run and one crash run), so detection speed, not the failover itself, dominates the
+  variance.
+- A graceful stop and a hard crash cost the same — the window is detection + failover,
+  not shutdown cleanliness.
 
 **Service behaviour (TC-SV-002):** killing a node takes exactly that node's service
 instances down (`GPE_1#2`, `GSE_1#2`, `RESTPP#2`, …) while the peer replicas stay
@@ -165,8 +173,9 @@ always recovers to a consistent, serving state.
 - **HA converts most single-node failures into non-events.** Freeze, partition and
   component loss ran at 100% availability; only losing a *live* node incurs a
   failover window.
-- **Recovery cost scales with what was lost:** nothing (freeze/partition/component)
-  → a data node (~24–44 s) → the master node (~44 s, leader election).
+- **Recovery cost separates into two classes:** failures a replica can mask
+  (freeze/partition/component → zero downtime) versus losing a live node
+  (~24 s median failover, up to ~44 s worst case — master included).
 - **No acknowledged write is lost on a clean crash;** under a partition, writes are
   eventually consistent (documented finding).
 - **Failure is isolated to the failed node's service instances;** replicas on peers

@@ -1,0 +1,66 @@
+{
+  "mode": "HA",
+  "runs_per_scenario": 3,
+  "scenarios": {
+    "kill_tg2": {
+      "runs": 3,
+      "mttd_s": 0.14,
+      "downtime_s": 22.88,
+      "mttr_s": 23.86,
+      "mttr_min_s": 23.53,
+      "mttr_max_s": 30.5,
+      "availability_pct": 94.89,
+      "recovered": true
+    },
+    "stop_tg2": {
+      "runs": 3,
+      "mttd_s": 0.2,
+      "downtime_s": 22.95,
+      "mttr_s": 23.68,
+      "mttr_min_s": 23.67,
+      "mttr_max_s": 23.95,
+      "availability_pct": 94.89,
+      "recovered": true
+    },
+    "pause_tg3": {
+      "runs": 3,
+      "mttd_s": null,
+      "downtime_s": 0,
+      "mttr_s": null,
+      "mttr_min_s": null,
+      "mttr_max_s": null,
+      "availability_pct": 100.0,
+      "recovered": true
+    },
+    "partition_tg3": {
+      "runs": 3,
+      "mttd_s": null,
+      "downtime_s": 0,
+      "mttr_s": null,
+      "mttr_min_s": null,
+      "mttr_max_s": null,
+      "availability_pct": 100.0,
+      "recovered": true
+    },
+    "component_gpe": {
+      "runs": 3,
+      "mttd_s": null,
+      "downtime_s": 0,
+      "mttr_s": null,
+      "mttr_min_s": null,
+      "mttr_max_s": null,
+      "availability_pct": 100.0,
+      "recovered": true
+    },
+    "kill_tg1": {
+      "runs": 3,
+      "mttd_s": 0.45,
+      "downtime_s": 22.91,
+      "mttr_s": 23.91,
+      "mttr_min_s": 23.88,
+      "mttr_max_s": 43.97,
+      "availability_pct": 94.89,
+      "recovered": true
+    }
+  }
+}

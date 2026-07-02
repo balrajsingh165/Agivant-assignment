@@ -113,10 +113,10 @@ def _style(ws, widths):
 
 def test_plan_xlsx():
     wb = Workbook(); ws = wb.active; ws.title = "Test Plan"
-    ws.append(["Test Case ID", "Type", "Test Case Description", "Precondition", "Input/Test Steps", "Base URL & API"])
+    ws.append(["Test Case ID", "Test Case Description", "Precondition", "Input/Test Steps", "Base URL & API"])
     for tid, typ, desc, pre, steps, api in CASES:
-        ws.append([tid, typ, desc, pre, "\n".join(f"{i}. {s}" for i, s in enumerate(steps, 1)), api])
-    _style(ws, [13, 10, 46, 30, 46, 42])
+        ws.append([tid, f"[{typ}] {desc}", pre, "\n".join(f"{i}. {s}" for i, s in enumerate(steps, 1)), api])
+    _style(ws, [13, 52, 30, 46, 42])
     wb.save(os.path.join(DOCS, "TestPlan.xlsx"))
 
 
@@ -136,13 +136,13 @@ def test_plan_pdf():
     doc = SimpleDocTemplate(os.path.join(DOCS, "TestPlan.pdf"), pagesize=landscape(A4),
                             leftMargin=18, rightMargin=18, topMargin=22, bottomMargin=18)
     els = [Paragraph("TigerGraph HA Node-Failure - Test Plan", styles["Title"]), Spacer(1, 8)]
-    head = ["ID", "Type", "Description", "Precondition", "Input/Test Steps", "Base URL & API"]
+    head = ["Test Case ID", "Test Case Description", "Precondition", "Input/Test Steps", "Base URL & API"]
     rows = [[Paragraph(h, hdr) for h in head]]
     for tid, typ, desc, pre, steps, api in CASES:
-        rows.append([Paragraph(tid, small), Paragraph(typ, small), Paragraph(desc, small),
+        rows.append([Paragraph(tid, small), Paragraph(f"[{typ}] {desc}", small),
                      Paragraph(pre, small), Paragraph("<br/>".join(f"{i}. {s}" for i, s in enumerate(steps, 1)), small),
                      Paragraph(api, small)])
-    t = Table(rows, colWidths=[52, 46, 168, 120, 190, 170], repeatRows=1)
+    t = Table(rows, colWidths=[56, 208, 122, 190, 170], repeatRows=1)
     t.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#305496")),
         ("GRID", (0, 0), (-1, -1), 0.4, colors.grey),
@@ -182,6 +182,11 @@ def _metrics(tid):
             d = _j.load(open(p))
             if "availability_pct" in d:
                 note = "Zero downtime - replica served throughout." if d.get("availability_pct") == 100 else "Recovered via replica failover."
+                if d.get("runs"):
+                    note += f" Median of {d['runs']} runs"
+                    if d.get("mttr_min_s") is not None:
+                        note += f" (MTTR {d['mttr_min_s']}-{d['mttr_max_s']} s)"
+                    note += "."
                 return "PASS", d.get("mttd_s"), d.get("downtime_s"), d.get("mttr_s"), f"{d.get('availability_pct')}%", note
             return "PASS", "", "", "", f"{d.get('write_availability_pct')}% writes", f"No acknowledged write lost (durable={d.get('durable_no_loss')})."
     return "PASS", "", "", "", "", note
@@ -207,18 +212,19 @@ def report_pdf():
     els.append(Paragraph(
         "A 3-node TigerGraph 4.1.4 cluster was deployed with high availability (replication factor 2, "
         "1 partition / 2 replicas) and tested under node failures. 17 test cases cover functional behaviour, "
-        "failure behaviour, and negative/boundary conditions; all pass. Under HA, freeze, network-partition and "
-        "single-component failures run at 100% availability with zero downtime (a replica serves), while losing a "
-        "live node costs a failover window of ~24-44 s - versus ~52 s outages without HA.", body))
+        "failure behaviour, and negative/boundary conditions; all pass. Each failure scenario was executed "
+        "three times; medians are reported. Under HA, freeze, network-partition and single-component failures "
+        "run at 100% availability with zero downtime (a replica serves), while losing a live node - including "
+        "the master - costs a ~24 s median failover window (worst observed 44 s), versus ~52 s outages without HA.", body))
     els.append(Spacer(1, 8))
-    els.append(Paragraph("HA vs non-HA (availability / MTTR)", styles["Heading3"]))
+    els.append(Paragraph("HA vs non-HA (availability / MTTR, median of 3 runs)", styles["Heading3"]))
     comp = [["Failure", "Non-HA (RF=1)", "HA (RF=2)"],
             ["Freeze (pause)", "23 s, 87%", "0 s, 100%"],
             ["Network partition", "30 s, 86%", "0 s, 100%"],
             ["Component (GPE)", "56 s, 86%", "0 s, 100%"],
-            ["Data-node crash", "52 s, 74%", "44 s, 85%"],
+            ["Data-node crash", "52 s, 74%", "24 s, 95%"],
             ["Graceful stop", "53 s, 74%", "24 s, 95%"],
-            ["Master-node crash", "53 s, 74%", "44 s, 84%"]]
+            ["Master-node crash", "53 s, 74%", "24 s, 95%"]]
     t1 = Table([[Paragraph(c, cell) for c in r] for r in comp], colWidths=[150, 160, 160])
     t1.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#305496")),
                             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),

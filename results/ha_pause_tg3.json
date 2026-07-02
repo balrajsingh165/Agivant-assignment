@@ -1,6 +1,6 @@
 {
-  "total": 137,
-  "ok": 137,
+  "total": 138,
+  "ok": 138,
   "failed": 0,
   "availability_pct": 100.0,
   "outages": [],
@@ -12,5 +12,8 @@
   "target": "tg3",
   "observer": "tg1",
   "ha_mode": "HA",
-  "recovered": true
+  "recovered": true,
+  "runs": 3,
+  "mttr_min_s": null,
+  "mttr_max_s": null
 }

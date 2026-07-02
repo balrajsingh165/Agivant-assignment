@@ -23,13 +23,10 @@
   "downtime_s": 22.91,
   "mttd_s": 0.45,
   "mttr_s": 23.91,
-  "scenario": "ha_kill_tg1",
+  "scenario": "runs/ha_kill_tg1_r3",
   "fault": "kill",
   "target": "tg1",
   "observer": "tg2",
   "ha_mode": "HA",
-  "recovered": true,
-  "runs": 3,
-  "mttr_min_s": 23.88,
-  "mttr_max_s": 43.97
+  "recovered": true
 }

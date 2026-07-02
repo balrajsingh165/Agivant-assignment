@@ -1,0 +1,32 @@
+{
+  "total": 137,
+  "ok": 130,
+  "failed": 7,
+  "availability_pct": 94.89,
+  "outages": [
+    {
+      "start": 1782968443.506,
+      "end": 1782968446.781,
+      "seconds": 3.28
+    },
+    {
+      "start": 1782968447.06,
+      "end": 1782968456.847,
+      "seconds": 9.79
+    },
+    {
+      "start": 1782968457.11,
+      "end": 1782968466.926,
+      "seconds": 9.82
+    }
+  ],
+  "downtime_s": 22.88,
+  "mttd_s": 0.11,
+  "mttr_s": 23.53,
+  "scenario": "runs/ha_kill_tg2_r2",
+  "fault": "kill",
+  "target": "tg2",
+  "observer": "tg1",
+  "ha_mode": "HA",
+  "recovered": true
+}

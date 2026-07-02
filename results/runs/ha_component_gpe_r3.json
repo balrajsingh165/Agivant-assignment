@@ -7,13 +7,10 @@
   "downtime_s": 0,
   "mttd_s": null,
   "mttr_s": null,
-  "scenario": "ha_component_gpe",
+  "scenario": "runs/ha_component_gpe_r3",
   "fault": "component",
   "target": "tg2",
   "observer": "tg1",
   "ha_mode": "HA",
-  "recovered": true,
-  "runs": 3,
-  "mttr_min_s": null,
-  "mttr_max_s": null
+  "recovered": true
 }
