@@ -49,13 +49,14 @@ tigergraph_ha/                   test harness package
   faults.py                      fault injection and recovery
   probe.py                       availability probe + MTTR analysis
   scenario.py                    read- and write-path failure scenarios
-tests/                           pytest suite (17 cases; ids TC-QL/SV/LJ/NF/WR/NG/BD-*)
+tests/                           pytest suite (18 cases; ids TC-QL/SV/LJ/NF/WR/NG/BD/CFG-*)
   test_gsql_queries.py           GSQL query combinations (functional)
   test_service_health.py         service status + crash behaviour
   test_loading_job.py            loading job from a CSV source
   test_node_failures.py          6 node-failure modes: availability + MTTR
   test_write_durability.py       write availability + durability under failure
   test_negative_boundary.py      invalid query; two-node boundary
+  test_config_change.py          gadmin config change + restart-all resilience
 results/                         per-scenario JSON (ha_* HA, noha_* RF=1 baseline)
 logs/                            per-test logs
 docs/
@@ -65,7 +66,7 @@ docs/
   report.html                    pytest HTML execution report
   TestExecutionReport.xlsx       per-case results (status, MTTR, availability)
   screenshots/                   command evidence screenshots (SS-01..SS-12)
-  findings/                      bug/finding reports (FIND-*.md and .docx)
+  findings/                      bug reports with root-cause analysis (BUG-*.md and .docx)
   SETUP.md, install_conf.template.json
 ```
 

@@ -73,6 +73,9 @@ CASES = [
     ("TC-BD-001", "Boundary", "Two-node failure exceeds RF=2 tolerance; cluster must recover after nodes return.",
      "HA cluster active.", ["docker kill tg2 and tg3", "Observe availability (likely lost)", "Recover both nodes", "Verify cluster recovers"],
      f"docker kill tg2 tg3 ; {REST}"),
+    ("TC-CFG-001", "Positive", "Configuration change: set a service config variable, apply and restart all; the value takes effect and all services return Online.",
+     "HA cluster active.", ["gadmin config get RESTPP.Factory.DefaultQueryTimeoutSec (baseline)", "gadmin config set <var> <new value>", "gadmin config apply -y", "gadmin restart all -y", "gadmin status -v: verify all Online and the new value applied", "Revert the variable"],
+     "gadmin config set RESTPP.Factory.DefaultQueryTimeoutSec 45 ; gadmin config apply -y ; gadmin restart all -y ; gadmin status -v"),
 ]
 
 AUTO = {
@@ -93,6 +96,7 @@ AUTO = {
     "TC-WR-002": "tests/test_write_durability.py::test_write_durability[TC-WR-002]",
     "TC-NG-001": "tests/test_negative_boundary.py::test_invalid_query_rejected",
     "TC-BD-001": "tests/test_negative_boundary.py::test_two_node_failure_boundary",
+    "TC-CFG-001": "tests/test_config_change.py::test_config_change_and_restart",
 }
 
 HEAD = PatternFill("solid", fgColor="305496")
@@ -168,6 +172,7 @@ NOTES = {
     "TC-SV-002": "Killed node's service instances went down; a replica stayed Online.",
     "TC-NG-001": "Invalid query rejected with an error; gateway kept serving.",
     "TC-BD-001": "Availability lost with 2/3 nodes down; cluster recovered after both returned.",
+    "TC-CFG-001": "Config change applied after restart; all services returned Online (reverted after).",
 }
 
 
@@ -211,7 +216,7 @@ def report_pdf():
     els = [Paragraph("TigerGraph High-Availability - Node-Failure Test Report", styles["Title"]), Spacer(1, 6)]
     els.append(Paragraph(
         "A 3-node TigerGraph 4.1.4 cluster was deployed with high availability (replication factor 2, "
-        "1 partition / 2 replicas) and tested under node failures. 17 test cases cover functional behaviour, "
+        "1 partition / 2 replicas) and tested under node failures. 18 test cases cover functional behaviour, "
         "failure behaviour, and negative/boundary conditions; all pass. Each failure scenario was executed "
         "three times; medians are reported. Under HA, freeze, network-partition and single-component failures "
         "run at 100% availability with zero downtime (a replica serves), while losing a live node - including "
@@ -230,7 +235,7 @@ def report_pdf():
                             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
                             ("GRID", (0, 0), (-1, -1), 0.4, colors.grey),
                             ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f2f2f2")])]))
-    els += [t1, Spacer(1, 10), Paragraph("Execution results (all 17 cases PASS)", styles["Heading3"])]
+    els += [t1, Spacer(1, 10), Paragraph("Execution results (all 18 cases PASS)", styles["Heading3"])]
     head = ["ID", "Type", "Description", "Status", "MTTR", "Avail", "Notes"]
     rows = [[Paragraph(h, cell) for h in head]]
     for tid, typ, desc, *_ in CASES:
@@ -246,38 +251,94 @@ def report_pdf():
     doc.build(els)
 
 
-FINDINGS = [
-    ("FIND-001", "Availability flaps during recovery from a network partition", "Low-Medium", "TC-NF-004",
-     "When a partitioned node reconnects, availability does not recover in a single clean transition; the probe recorded two outage windows before it stabilised.",
-     ["Load the sample graph; confirm HTTP 200.", "Isolate tg3 from the network.", "Probe ping_count every 250 ms.", "Reconnect tg3 and keep probing."],
-     "One outage window - down at disconnect, up once reconnected.",
-     "Two outage windows; a short second dip after the first recovery.",
-     "A client treating the first success as 'recovered' may hit a second brief failure.",
-     "Define recovery as sustained availability, not the first success."),
-    ("FIND-002", "Ambiguous write outcomes during a network partition", "Medium", "TC-WR-002",
-     "During a partition, some upserts the client saw time out were nonetheless committed; the count rose by more than the acknowledged successes. No acknowledged write was lost.",
-     ["Record baseline count.", "Isolate tg2.", "Upsert new vertices via a surviving node.", "Reconnect; re-read count."],
-     "A timed-out write did not take effect.",
-     "The count rose by more than the acknowledged successes.",
-     "A client cannot assume a timed-out write did not happen; naive retry could double-apply.",
-     "Use idempotent writes (upsert by stable id) and reconcile after a partition."),
+# id, title, severity, related TC, component, summary, steps, expected, actual, root_cause, impact, recommendation
+BUGS = [
+    ("BUG-001", "HA license / replication-factor mismatch is detected only at cluster init, not precheck",
+     "Medium", "TC-NF-001", "Installer / precheck",
+     "Installing at replication factor 2 with a license that lacks the Data-HA entitlement completes the entire multi-node install and only fails at the final cluster-initialisation step when the license is applied.",
+     ["Set ReplicationFactor=2 in install_conf.json with a non-HA (DataHA:false) license.",
+      "Run ./install.sh -n and let it finish.",
+      "Observe cluster init fail: 'cannot set license: does not support HA ... reduce replication factor'."],
+     "Precheck rejects the incompatible license/replication-factor combination before the ~3 GB install starts.",
+     "The full install (all nodes, binaries unpacked) completes, then fails only at license-apply during init.",
+     "The precheck phase validates OS, tools, ports and disk but does not cross-check the license's DataHA entitlement against the requested ReplicationFactor. The compatibility check runs only when gadmin applies the license at cluster init - after the install is done.",
+     "Wasted install time (~10 min) and a confusing late failure; the actual blocker (license) is unrelated to anything the installer reported during the long install.",
+     "Validate license entitlements against the requested replication factor during precheck, and fail fast with the remediation hint."),
+    ("BUG-002", "Writes acknowledged during a network partition are not immediately durable (eventual consistency)",
+     "Medium", "TC-WR-002", "RESTPP / write path",
+     "During a network partition, vertex upserts sent through the majority side return client-visible failures/timeouts for some requests, and the post-heal vertex count does not consistently reflect the acknowledged writes - it lagged in one run and matched in others.",
+     ["Record the baseline vertex count from a surviving node.",
+      "Partition tg2 from the cluster network.",
+      "Upsert N new vertices through a surviving node during the outage; record client ok/fail.",
+      "Heal the partition and immediately re-read the count."],
+     "Every acknowledged write is immediately durable and visible on read-after-write.",
+     "The count did not immediately reflect the acknowledged writes (delta 0 with 34 client-acks in one run; correct in others).",
+     "The write coordinator acknowledges before the replica on the reconnecting side has reconciled, and a count query can be served by a replica that has not yet applied the merged writes - so read-after-write is only eventually consistent across a partition.",
+     "A client cannot rely on read-after-write during/after a partition; naive retry of a 'failed' write can double-apply.",
+     "Use idempotent upserts (stable primary keys), reconcile after reconnection, and document the consistency window; consider read-from-primary after a topology change."),
+    ("BUG-003", "Availability flaps (recovers, then drops again) while a partitioned node rejoins",
+     "Low-Medium", "TC-NF-004", "Cluster membership / query routing",
+     "When a partitioned node reconnects, availability does not recover monotonically: the probe recorded two separate outage windows - a recovery, a second brief drop, then a stable recovery.",
+     ["Isolate tg3 from the network; confirm the outage.",
+      "Probe ping_count every 250 ms.",
+      "Reconnect tg3 at its original IP and keep probing through recovery."],
+     "A single clean recovery transition once the node reconnects.",
+     "Two outage windows - a short second dip occurs after the first apparent recovery.",
+     "The reconnecting node re-registers with the cluster and is briefly placed back into the query-routing pool before it is fully caught up, so requests routed to it fail transiently until it stabilises.",
+     "A client that treats the first post-partition success as 'recovered' can hit a second failure; retry/health logic must require sustained success.",
+     "Admit a rejoining node into the routing pool only after it reports fully synced; expose a 'ready' vs 'live' distinction."),
+    ("BUG-004", "Failover time (MTTR) for a live-node loss is inconsistent - up to ~2x the median",
+     "Low", "TC-NF-006", "Failure detection",
+     "For the same fault, MTTR after losing a live node is ~24 s in most runs but reached ~44 s in some (data-node crash and master-node crash), a near-2x spread.",
+     ["Kill a node (docker kill) while probing every 250 ms.",
+      "Record MTTR (fault -> sustained recovery).",
+      "Repeat 3+ times and compare."],
+     "A consistent, bounded failover time across repeated runs.",
+     "MTTR ranged 23.5-44.0 s across runs for the same scenario.",
+     "Failure detection relies on a heartbeat/timeout: when the node dies just after a heartbeat, detection waits close to a full interval before failover begins, adding a near-constant penalty to that run's MTTR.",
+     "Recovery time is unpredictable; capacity/SLA planning must assume the worst case, not the median.",
+     "Shorten or make the heartbeat adaptive for faster detection; publish expected p50/p95 failover times."),
 ]
+
+
+def _bug_body_lines(bug):
+    _id, title, sev, tc, comp, summary, steps, expected, actual, rca, impact, rec = bug
+    return [("Related test case", tc), ("Severity", sev), ("Component", comp)], [
+        ("Summary", summary), ("Steps to reproduce", steps), ("Expected", expected),
+        ("Actual", actual), ("Root cause analysis", rca), ("Impact", impact), ("Recommendation", rec)]
 
 
 def bug_docs():
     os.makedirs(os.path.join(DOCS, "findings"), exist_ok=True)
-    for fid, title, sev, tc, summary, steps, expected, actual, impact, rec in FINDINGS:
+    for bug in BUGS:
+        bid, title = bug[0], bug[1]
+        meta, sections = _bug_body_lines(bug)
+        # .docx
         doc = Document()
-        doc.add_heading(f"{fid} - {title}", 0)
-        t = doc.add_table(rows=3, cols=2); t.style = "Light Grid Accent 1"
-        for i, (k, v) in enumerate([("Related test", tc), ("Severity", sev), ("Type", "Recovery / consistency")]):
+        doc.add_heading(f"{bid} - {title}", 0)
+        t = doc.add_table(rows=len(meta), cols=2); t.style = "Light Grid Accent 1"
+        for i, (k, v) in enumerate(meta):
             t.rows[i].cells[0].text = k; t.rows[i].cells[1].text = v
-        for h, body in [("Summary", summary), ("Expected", expected), ("Actual", actual), ("Impact", impact), ("Recommendation", rec)]:
-            doc.add_heading(h, 1); doc.add_paragraph(body)
-        doc.add_heading("Steps to reproduce", 1)
-        for s in steps:
-            doc.add_paragraph(s, style="List Number")
-        doc.save(os.path.join(DOCS, "findings", f"{fid}.docx"))
+        for h, body in sections:
+            doc.add_heading(h, 1)
+            if isinstance(body, list):
+                for s in body:
+                    doc.add_paragraph(s, style="List Number")
+            else:
+                doc.add_paragraph(body)
+        doc.save(os.path.join(DOCS, "findings", f"{bid}.docx"))
+        # .md
+        md = [f"# {bid} — {title}", "", "| Field | Value |", "|---|---|"]
+        md += [f"| {k} | {v} |" for k, v in meta] + [""]
+        for h, body in sections:
+            md.append(f"## {h}")
+            if isinstance(body, list):
+                md += [f"{i}. {s}" for i, s in enumerate(body, 1)]
+            else:
+                md.append(body)
+            md.append("")
+        with open(os.path.join(DOCS, "findings", f"{bid}.md"), "w", encoding="utf-8") as f:
+            f.write("\n".join(md))
 
 
 def main():
@@ -288,7 +349,7 @@ def main():
     report_pdf()
     bug_docs()
     print("wrote: TestPlan.xlsx, TestPlan.pdf, TraceabilityMatrix.xlsx, "
-          "TestExecutionReport.xlsx, REPORT.pdf, findings/FIND-001.docx, FIND-002.docx")
+          "TestExecutionReport.xlsx, REPORT.pdf, findings/BUG-001..004 (.md + .docx)")
 
 
 if __name__ == "__main__":

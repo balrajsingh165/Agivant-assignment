@@ -1,0 +1,9 @@
+TEST      : tests/test_config_change.py::test_config_change_and_restart
+OUTCOME   : PASSED
+DURATION  : 254.82s
+
+EXPECTED vs OBSERVED
+  - config value applied after restart: expected=45 | observed=45
+  - all critical services Online after restart: expected=True | observed=True
+  - query serves after config restart: expected=200 | observed=200
+

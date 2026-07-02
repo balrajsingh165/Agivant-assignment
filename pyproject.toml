@@ -20,4 +20,5 @@ markers = [
     "loading_job: data loading job tests",
     "negative: negative-path tests",
     "boundary: boundary / limit tests",
+    "config: configuration-change / restart-resilience tests",
 ]

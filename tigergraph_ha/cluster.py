@@ -74,6 +74,28 @@ def gsql(command, graph="social", timeout=180):
     return docker_exec(MASTER, f"export PATH=$PATH:{GADMIN_DIR}; gsql {g}'{esc}'", timeout=timeout).stdout
 
 
+def config_get(var):
+    """Return the current value of a gadmin config variable (last non-empty output line)."""
+    out = gadmin(f"config get {var}").stdout
+    lines = [l.strip() for l in out.splitlines() if l.strip()]
+    return lines[-1] if lines else ""
+
+
+def config_set(var, value, timeout=120):
+    """Set a gadmin config variable (staged; call config_apply to activate)."""
+    return gadmin(f"config set {var} {value}", timeout=timeout)
+
+
+def config_apply(timeout=180):
+    """Apply staged gadmin config changes."""
+    return gadmin("config apply -y", timeout=timeout)
+
+
+def restart_all(timeout=400):
+    """Restart all TigerGraph services."""
+    return gadmin("restart all -y", timeout=timeout)
+
+
 def service_states(node=MASTER):
     """Parse `gadmin status -v` into {service_name: status} (e.g. GPE_1#1 -> Online)."""
     states = {}

@@ -4,7 +4,7 @@ While a node is down, vertices are upserted through a surviving node; after
 recovery the state is checked. A clean node crash must not lose acknowledged
 writes (strict). A network partition is inherently ambiguous - writes may be
 acknowledged by the majority yet reconcile with a delay (eventual consistency,
-see docs/findings/FIND-002) - so there we assert recovery to a consistent,
+see docs/findings/BUG-002) - so there we assert recovery to a consistent,
 serving state and record the write outcome rather than assert strict durability.
 """
 import pytest

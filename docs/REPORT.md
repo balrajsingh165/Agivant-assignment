@@ -15,10 +15,10 @@ factor 2)** and tested for how the product *behaves* under node failures — not
 whether it recovers, but which internal services drop, whether queries and loading
 jobs keep working, and how fast it recovers (MTTR).
 
-17 test cases cover functional behaviour (service health, GSQL query combinations,
-data loading), failure behaviour (six node-failure modes, service-crash inspection,
-write durability), and negative / boundary conditions. Evidence: an HTML report, an
-Allure report, per-test logs, and command screenshots.
+18 test cases cover functional behaviour (service health, GSQL query combinations,
+data loading, configuration change), failure behaviour (six node-failure modes,
+service-crash inspection, write durability), and negative / boundary conditions.
+Evidence: an HTML report, an Allure report, per-test logs, and command screenshots.
 
 **Headline result — HA works, and it is measurable.** Compared with a single-copy
 (replication factor 1) baseline, HA turns several node failures into *zero-downtime*
@@ -86,6 +86,15 @@ vertices through a surviving node during the outage and re-checks the count afte
 recovery. Tests live in `tests/`; raw results in `results/` (`ha_*` for HA,
 `noha_*` for the RF=1 baseline); per-test logs in `logs/`.
 
+**Execution model.** The suite runs **sequentially, by design**. Every failure test
+mutates the one shared cluster (kills, stops, partitions or restarts the same nodes),
+so running them in parallel would let one test's fault corrupt another's measurement —
+MTTR and availability would be meaningless. An autouse `healthy_cluster` fixture
+restores the cluster to a known-good state before each test, which makes the tests
+order-independent but still serial. The read-only functional tests (queries, service
+health) are parallel-safe in isolation, but they share the process with the failure
+tests, so the suite is kept serial for correct, reproducible measurements.
+
 ---
 
 ## 4. Test cases and findings
@@ -104,10 +113,23 @@ Full case specifications (with preconditions, steps, and API/commands) are in
 | TC-QL-004 | 2-hop friendship traversal | PASS |
 | TC-SV-001 | All critical services Online | PASS |
 | TC-LJ-001 | Loading job from a CSV file source | PASS |
+| TC-CFG-001 | Config change (`gadmin config set` → `apply` → `restart all`) | PASS |
 
 **Finding:** all query types return correct, error-free results on the HA cluster,
 and a loading job ingests a CSV source and increases the vertex count as expected —
 the product's core read and write paths work normally under HA.
+
+**Configuration management (TC-CFG-001):** changing a service configuration variable
+(`RESTPP.Factory.DefaultQueryTimeoutSec`) via `gadmin config set` → `gadmin config
+apply` → `gadmin restart all` takes effect cleanly — after the restart every critical
+service returns `Online` (`gadmin status -v`), the query path keeps serving, and the
+new value is reflected by `gadmin config get`. The change is reverted afterwards so
+the cluster is left at its baseline.
+
+![Config change and restart](screenshots/SS-13_config_change_restart.png)
+
+*`gadmin config set` → `apply` → `restart` → `config get` shows the new value (45)
+active and RESTPP back `Online` — configuration management and restart resilience.*
 
 ### 4.2 Behaviour under node failure
 
@@ -156,7 +178,7 @@ surviving replica — HA failover in action.*
 (~90% write availability) and **every acknowledged write persists** — no data loss.
 During a **network partition** the write path is *ambiguous*: writes acknowledged by
 the majority may reconcile with a delay (eventual consistency), so a client cannot
-assume a timed-out write did not take effect (see `findings/FIND-002`). The cluster
+assume a timed-out write did not take effect (see `findings/BUG-002`). The cluster
 always recovers to a consistent, serving state.
 
 ### 4.4 Negative and boundary
@@ -183,9 +205,17 @@ always recovers to a consistent, serving state.
 - The **boundary** case (two of three nodes) confirms the tolerance limit: HA
   survives one node, not two, and recovers cleanly afterwards.
 
-Documented findings: `findings/FIND-001` (availability flaps during partition
-rejoin), `findings/FIND-002` (ambiguous / eventually-consistent writes under a
-partition).
+## 5a. Bugs raised (with root-cause analysis)
+
+Four defects were found and written up with root-cause analysis in `docs/findings/`
+(`BUG-*.md` / `.docx`):
+
+| Bug | Severity | Title |
+|-----|----------|-------|
+| BUG-001 | Medium | HA license / replication-factor mismatch detected only at cluster init, not precheck |
+| BUG-002 | Medium | Writes acknowledged during a partition are not immediately durable (eventual consistency) |
+| BUG-003 | Low–Medium | Availability flaps (recovers, then drops again) while a partitioned node rejoins |
+| BUG-004 | Low | Failover time (MTTR) for a live-node loss is inconsistent — up to ~2× the median |
 
 ---
 
@@ -194,8 +224,9 @@ partition).
 - **HTML execution report:** `docs/report.html` (per-test expected-vs-observed).
 - **Execution results:** `docs/TestExecutionReport.xlsx` (status, MTTR, availability per case).
 - **Per-test logs:** `logs/`. Allure (optional): `uv run pytest --alluredir=allure-results`.
-- **Screenshots:** `docs/screenshots/` (SS-01…SS-07: service status, HA license,
-  GSQL query, REST query, services-down-after-kill, query-survives-HA, recovered).
+- **Screenshots:** `docs/screenshots/` (SS-01…SS-13: service status, HA license,
+  GSQL/REST queries, loading job, aggregation, invalid query, services-down-after-kill,
+  query-survives-HA, recovered, two-node boundary, full pytest pass, config change + restart).
 - **Raw metrics:** `results/ha_*.json` (HA) and `results/noha_*.json` (RF=1 baseline).
 
 ---
